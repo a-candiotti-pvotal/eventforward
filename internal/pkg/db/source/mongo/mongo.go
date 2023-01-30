@@ -12,15 +12,13 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/readpref"
-
-	"eventforward/internal/pkg/models"
 )
 
-type MongoDB struct {
+type MongoDB[T any] struct {
 	client *mongo.Client
 }
 
-func Setup() (*MongoDB, error) {
+func Setup[T any]() (*MongoDB[T], error) {
 	mongoURI := os.Getenv("MONGO_URI")
 	if mongoURI == "" {
 		return nil, errors.New("MONGO_URI env variable was empty")
@@ -31,7 +29,7 @@ func Setup() (*MongoDB, error) {
 	if err != nil {
 		return nil, err
 	}
-	m := &MongoDB{
+	m := &MongoDB[T]{
 		client: client,
 	}
 	return m, nil
@@ -59,7 +57,7 @@ func connect(uri string) (*mongo.Client, error) {
 	return client, nil
 }
 
-func (m *MongoDB) ReadOperations(done chan struct{}, opChan chan<- *models.ChangeEvent, errChan chan<- error, namespace string) {
+func (m *MongoDB[T]) ReadOperations(done chan struct{}, opChan chan<- *T, errChan chan<- error, namespace string) {
 	ctx, cancel := context.WithCancel(context.Background())
 	go func () {
 		select {
@@ -85,7 +83,7 @@ func (m *MongoDB) ReadOperations(done chan struct{}, opChan chan<- *models.Chang
 		log.Fatal(err)
 	}
 
-	var results []map[string]interface{}
+	var results []T
 	if err = cursor.All(ctx, &results); err != nil {
 		log.Fatal(err)
 	}
@@ -96,11 +94,7 @@ func (m *MongoDB) ReadOperations(done chan struct{}, opChan chan<- *models.Chang
 			// FIXME : stop reading?
 			log.Errorf("Decode fail on namespace %s.%s : %s", targetDatabaseName, targetCollectionName, err)
 		} else {
-			opChan <- &models.ChangeEvent{
-				// FIXME : what about other fields?
-				// OperationType: "insert", ? make sense?
-				FullDocument: result,
-			}
+			opChan <- &result
 		}
 	}
 }

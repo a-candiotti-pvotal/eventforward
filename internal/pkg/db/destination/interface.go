@@ -1,9 +1,5 @@
 package destination
 
-import (
-	"eventforward/internal/pkg/models"
-)
-
-type DB interface {
-	SendOperations(done chan struct{}, opChan <-chan *models.ChangeEvent, errChan chan<- error, to string)
+type DB[T any] interface {
+	SendOperations(done chan struct{}, opChan <-chan *T, errChan chan<- error, to string)
 }

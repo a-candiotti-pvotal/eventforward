@@ -9,15 +9,13 @@ import (
 	"errors"
 
 	"github.com/EventStore/EventStore-Client-Go/v3/esdb"
-
-	"eventforward/internal/pkg/models"
 )
 
-type EventStoreDB struct {
+type EventStoreDB[T any] struct {
 	client *esdb.Client
 }
 
-func Setup() (*EventStoreDB, error) {
+func Setup[T any]() (*EventStoreDB[T], error) {
 	esdbURI := os.Getenv("ESDB_URI")
 	if esdbURI == "" {
 		return nil, errors.New("ESDB_URI env variable was empty")
@@ -27,7 +25,7 @@ func Setup() (*EventStoreDB, error) {
 	if err != nil {
 		return nil, err
 	}
-	e := &EventStoreDB{ client: client }
+	e := &EventStoreDB[T]{ client: client }
 	return e, nil
 }
 
@@ -86,12 +84,12 @@ func appendBatchOfEventsToStream[T Free](e *esdb.Client, events []T, eventType, 
 
 const BufferSize = 500
 
-func (e *EventStoreDB) SendOperations(done chan struct{}, opChan <-chan *models.ChangeEvent, _ chan<- error, to string) {
+func (e *EventStoreDB[T]) SendOperations(done chan struct{}, opChan <-chan *T, _ chan<- error, to string) {
 	total := 0
 	nbr := 0
 	last := time.Now()
 
-	buffer := []*models.ChangeEvent{}
+	buffer := []*T{}
 
 	for {
 		select {
@@ -106,15 +104,16 @@ func (e *EventStoreDB) SendOperations(done chan struct{}, opChan <-chan *models.
 			buffer = append(buffer, event)
 
 			if len(buffer) >= BufferSize {
-				// FIXME : right eventType?
-				err := appendBatchOfEventsToStream(e.client, buffer, event.Ns.Db, to)
+				// FIXME : how to get event type with generics?
+				// event.Ns.Db
+				err := appendBatchOfEventsToStream(e.client, buffer, "", to)
 				if err != nil {
 					log.Println(err)
 					//				errChan <- err
 				}
 
 				nbr += len(buffer)
-				buffer = []*models.ChangeEvent{}
+				buffer = []*T{}
 			}
 
 			if time.Since(last) >= 1 * time.Second {
