@@ -11,7 +11,20 @@ import (
 // FIXME : DEBUG
 // FIXME : read from yaml/json
 var decls = []publicmodels.ForwardDecl{
-	{From: "profiling.bet", To: "bet", Watch: true},
+	{
+		Name: "mongo-eventstore",
+		From: publicmodels.ForwardDeclPoint{
+			Type: "mongo",
+			Database: "profiling",
+			Table: "bet",
+		},
+		To: publicmodels.ForwardDeclPoint{
+			Type: "eventstore",
+			Database: "profiling",
+			Table: "bet",
+		},
+		Watch: true,
+	},
 }
 
 func main() {

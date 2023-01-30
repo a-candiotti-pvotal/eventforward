@@ -1,7 +1,6 @@
 package mongo
 
 import (
-	"strings"
 	"context"
 
 	log "github.com/sirupsen/logrus"
@@ -11,18 +10,11 @@ import (
 // TODO : do a common function with ReadOperations that have different behavior for watch and read?
 // something like that, code is very close
 
-func (m *MongoDB[T]) WatchOperations(done chan struct{}, opChan chan<- *T, _ chan<- error, namespace string) {
-	snamespace := strings.Split(namespace, ".")
-	if len(snamespace) != 2 {
-		log.Fatalf("Malformated namespace, should be collection.name : %s\n", namespace)
-	}
-
-	targetDatabaseName := snamespace[0]
-	targetCollectionName := snamespace[1]
-
-	c := m.client.Database(targetDatabaseName).Collection(targetCollectionName)
+func (m *MongoDB[T]) WatchOperations(done chan struct{}, opChan chan<- *T, _ chan<- error, database, collection string) {
+	c := m.client.Database(database).Collection(collection)
 
 	ctx, cancel := context.WithCancel(context.Background())
+
 	changeStream, err := c.Watch(ctx, mongo.Pipeline{})
 	if err != nil {
 		log.Fatal(err)
@@ -31,8 +23,8 @@ func (m *MongoDB[T]) WatchOperations(done chan struct{}, opChan chan<- *T, _ cha
 	go func () {
 		select {
 		case <-done:
-			changeStream.Close(ctx)
 			cancel()
+			changeStream.Close(context.Background())
 			return
 		}
 	}()
@@ -41,7 +33,7 @@ func (m *MongoDB[T]) WatchOperations(done chan struct{}, opChan chan<- *T, _ cha
 		var result T
 		err := changeStream.Decode(&result)
 		if err != nil {
-			log.Errorf("Decode fail on namespace %s.%s : %s", targetDatabaseName, targetCollectionName, err)
+			log.Errorf("Decode fail on namespace %s.%s : %s", database, collection, err)
 		} else {
 			opChan <- &result
 		}

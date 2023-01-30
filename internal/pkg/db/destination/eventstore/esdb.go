@@ -84,7 +84,7 @@ func appendBatchOfEventsToStream[T Free](e *esdb.Client, events []T, eventType, 
 
 const BufferSize = 500
 
-func (e *EventStoreDB[T]) SendOperations(done chan struct{}, opChan <-chan *T, _ chan<- error, to string) {
+func (e *EventStoreDB[T]) SendOperations(done chan struct{}, opChan <-chan *T, _ chan<- error, stream, eventType string) {
 	total := 0
 	nbr := 0
 	last := time.Now()
@@ -106,7 +106,7 @@ func (e *EventStoreDB[T]) SendOperations(done chan struct{}, opChan <-chan *T, _
 			if len(buffer) >= BufferSize {
 				// FIXME : how to get event type with generics?
 				// event.Ns.Db
-				err := appendBatchOfEventsToStream(e.client, buffer, "", to)
+				err := appendBatchOfEventsToStream(e.client, buffer, eventType, stream)
 				if err != nil {
 					log.Println(err)
 					//				errChan <- err

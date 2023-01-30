@@ -13,8 +13,8 @@ import (
 )
 
 func forward[T any](done chan struct{}, wg *sync.WaitGroup, decl *models.ForwardDecl) {
-	src := source.DBFromEnv[T]()
-	dst := destination.DBFromEnv[T]()
+	src := source.DBFromName[T](decl.Name, decl.From.Type)
+	dst := destination.DBFromName[T](decl.Name, decl.To.Type)
 
 	opChan := make(chan *T, 5000)
 	errChan := make(chan error) // Error Channel
@@ -22,15 +22,15 @@ func forward[T any](done chan struct{}, wg *sync.WaitGroup, decl *models.Forward
 	// FIXME : cleaner wg?
 	//         what to do with errors?
 	go func () {
-		dst.SendOperations(done, opChan, errChan, decl.To)
+		dst.SendOperations(done, opChan, errChan, decl.To.Database, decl.To.Table)
 		wg.Done()
 	}()
 
 	if decl.Watch {
-		src.WatchOperations(done, opChan, errChan, decl.From)
+		src.WatchOperations(done, opChan, errChan, decl.From.Database, decl.To.Table)
 	} else {
 		// TODO : rename?
-//		src.ReadOperations(done, opChan, errChan, decl.From)
+		src.ReadOperations(done, opChan, errChan, decl.From.Database, decl.From.Table)
 	}
 	wg.Done()
 }
@@ -51,7 +51,11 @@ func ForwardEvents[T any](decls []models.ForwardDecl) {
 	wg.Add(len(decls) * 2)
 
 	for _, decl := range decls {
-		go forward[T](done, wg, &decl)
+		if decl.From.Database == "any" {
+			go forward[map[string]interface{}](done, wg, &decl)
+		} else {
+			go forward[T](done, wg, &decl)
+		}
 	}
 
 	wg.Wait()

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"os"
-	"strings"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -57,25 +56,10 @@ func connect(uri string) (*mongo.Client, error) {
 	return client, nil
 }
 
-func (m *MongoDB[T]) ReadOperations(done chan struct{}, opChan chan<- *T, errChan chan<- error, namespace string) {
+func (m *MongoDB[T]) ReadOperations(done chan struct{}, opChan chan<- *T, errChan chan<- error, database, collection string) {
+	c := m.client.Database(database).Collection(collection)
+
 	ctx, cancel := context.WithCancel(context.Background())
-	go func () {
-		select {
-		case <-done:
-			cancel()
-			return
-		}
-	}()
-
-	snamespace := strings.Split(namespace, ".")
-	if len(snamespace) != 2 {
-		log.Fatalf("Malformated namespace, should be collection.name : %s\n", namespace)
-	}
-
-	targetDatabaseName := snamespace[0]
-	targetCollectionName := snamespace[1]
-
-	c := m.client.Database(targetDatabaseName).Collection(targetCollectionName)
 
 	filter := bson.D{}
 	cursor, err := c.Find(ctx, filter)
@@ -88,11 +72,20 @@ func (m *MongoDB[T]) ReadOperations(done chan struct{}, opChan chan<- *T, errCha
 		log.Fatal(err)
 	}
 
+	go func () {
+		select {
+		case <-done:
+			cancel()
+			cursor.Close(context.Background())
+			return
+		}
+	}()
+
 	for _, result := range results {
 		cursor.Decode(&result)
 		if err != nil {
-			// FIXME : stop reading?
-			log.Errorf("Decode fail on namespace %s.%s : %s", targetDatabaseName, targetCollectionName, err)
+			// FIXME : stop reading? warning?
+			log.Errorf("Decode fail on namespace %s.%s : %s", database, collection, err)
 		} else {
 			opChan <- &result
 		}
